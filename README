@@ -44,8 +44,3 @@ image legend
  1 | <Area containing 2 pins (e.g. 'peter'), size 9 >
  A | mr bean
 ------------
-
-.. image:: http://maps.googleapis.com/maps/api/staticmap?size=800x600&maptype=hybrid&sensor=false&scale=2&markers=label:1|color:blue|52.52529,13.40298&path=enc:azq_ImuxpA?cAb@??bAc@?&path=enc:}xq_ImuxpA?cA`@??bAa@?&path=enc:azq_IisxpA?cAb@??bAc@?&path=enc:}xq_IisxpA?cA`@??bAa@?&path=enc:azq_IcqxpA?eAb@??dAc@?&path=enc:}xq_IcqxpA?eA`@??dAa@?&path=enc:{wq_ImuxpA?cA`@??bAa@?&path=enc:{wq_IisxpA?cA`@??bAa@?&path=enc:{wq_IcqxpA?eA`@??dAa@?&markers=label:A|52.52572,13.40075&path=fillcolor:red|weight:0|enc:g}q_IqhxpA?cA`@??bAa@? 
-   :height: 100px
-   :width: 200px
-   :align: right
