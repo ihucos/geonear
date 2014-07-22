@@ -156,14 +156,14 @@ class Globe(object):
             local key_prefix = ARGV[1]   -- prepend this to all keys
             local pin_id = ARGV[2]       -- the pin that will be added or moved
             local new_pin_gh = ARGV[3]   -- where this pin should be pinned
-            local set_pin_data = ARGV[4] -- which data should be saved for this pin
+            local pin_data = ARGV[4] -- which data should be saved for this pin
 
             -- get the current pin location
             local pin_gh = redis.call('hget', key_prefix..'pins', pin_id) 
 
             -- set pin data if requested
-            if set_pin_data then
-                redis.call('hset', key_prefix..'data', pin_id, set_pin_data)
+            if pin_data then
+                redis.call('hset', key_prefix..'data', pin_id, pin_data)
             end
 
             -- if this pin has an location in our redis database
