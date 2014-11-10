@@ -1,7 +1,7 @@
 ### What is *Geonear*?
 
 *Geonear* is a library that provides lightweight geolocation queries backed by Redis.
-API and code are designed to resemble a functional programming style.
+API and code are designed to resemble a somewhat functional programming style.
 
 Consider it pre-Beta, no unit tests yet.
 
