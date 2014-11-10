@@ -1,9 +1,9 @@
-geonear
-=======
+### geonear
 
 Geonear makes fast geo queries on Redis possible.
 Consider it pre-Beta, no unit tests yet.
 
+```
 >>> from redis import StrictRedis
 >>> from geonear import Globe
 >>> globe = Globe(StrictRedis(), geohash_precision=8)
@@ -44,3 +44,4 @@ image legend
  1 | <Area containing 2 pins (e.g. 'peter'), size 9 >
  A | mr bean
 ------------
+```
