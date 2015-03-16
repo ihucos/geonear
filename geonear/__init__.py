@@ -26,13 +26,16 @@
 #  TODO: add namespace support, call it label?
 #  TODO: find nicer method names, especially for almost_near and friends.
 
-import json
 import hashlib
+import json
+import webbrowser
 from random import choice
 
+import gpolyencode
 import requests
-import geohash  # install with `pip install python-geohash`
 
+import geohash  # install with `pip install python-geohash`
+from colornames import colornames
 
 PROJECT_URL = 'http://github.com/ihuecos/geonear'
 
@@ -138,7 +141,7 @@ class Globe(object):
     '''
 
     def __init__(self, redis, geohash_precision,
-                 cache_geocoding=20,
+                 cache_geocoding=20,  # FIXME: XXX seems not to be working!!!
                  nominatim_search_endpoint=None,
                  nominatim_reverse_endpoint=None,
                  nominatim_mail=None,
@@ -341,100 +344,51 @@ class Globe(object):
         else:
             raise ValueError('needs one location specificaton')
 
-    def debug(self, *items, **kw):
-        from string import ascii_uppercase
-        import webbrowser
-        import gpolyencode
+    def debug(self, items,
+              size=(800, 600), return_only=False, maptype="hybrid"):
 
-        size = kw.get('size', (800, 600))
-        return_only = kw.get('return_only', False)
-        maptype = kw.get('maptype', 'hybrid')
+            if maptype not in ('roadmap', 'satellite', 'hybrid', 'terrain'):
+                raise TypeError('maptype not supported')
 
-        assert maptype in ('roadmap', 'satellite', 'hybrid', 'terrain')
+            polyenc = gpolyencode.GPolyEncoder()
+            url = 'http://maps.googleapis.com/maps/api/staticmap?'
+            url += 'size={}x{}&maptype={}&sensor=false&scale=2'.format(
+                size[0], size[1], maptype)
 
-        ascii_labels = list(ascii_uppercase)
-        number_labels = list('123456789')
-        polyenc = gpolyencode.GPolyEncoder()
-        draw_geohashes = []
+            for (color_name, color_hex), item in zip(colornames, items):
 
-        for item in items:
-            if isinstance(item, Area):
-                use_label = True
-                for gh in sorted(item.geohashes, reverse=True):
-                    draw_geohashes.append(('rect', gh, use_label, item))
-                    use_label = False
-            else:
-                gh = self.geohash(item)
-                draw_geohashes.append(('fill', gh, True, item))
 
-        used_labels = {}
-        label_description = {}
-        url = 'http://maps.googleapis.com/maps/api/staticmap?'
-        url += 'size={}x{}&maptype={}&sensor=false&scale=2'.format(
-            size[0], size[1], maptype)
-        for cmd, gh, use_label, obj, in draw_geohashes:
-                if use_label:
-                    # get the corresponding label
-                    label = used_labels.get(gh)
-                    if not label:
-                        try:
-                            label = (ascii_labels.pop(0) if cmd == 'fill'
-                                     else number_labels.pop(0))
-                        except IndexError:
-                            # * will be showed as a cirlce in google maps
-                            label = '*'
-                        used_labels[gh] = label
+                if isinstance(item, Area):
+                    polygons = item.get_polygons()
+                    for points in polygons:
+                        p = polyenc.encode([(p[1], p[0]) for p in points])
+                        polyline_encoded = p['points']
+                        url += '&path=fillcolor:0x{}|weight:0|enc:{}'.format(
+                            color_hex[1:], polyline_encoded)
+                    print "{}: {}".format(item, color_name)
 
-                if cmd == 'fill':
-
-                    latlon = geohash.decode(gh)
-                    url += '&markers=label:{label}|{lat},{lon}'.format(
-                        lat=round(latlon[0], 5),
-                        lon=round(latlon[1], 5),
-                        label=label)
-                    url += '&path=fillcolor:red|weight:0|'
-
-                elif cmd == 'rect':
-                    if use_label:
+                elif isinstance(item, basestring):
+                    gh = self.geohash(item)
+                    if gh:
                         bbox = geohash.bbox(gh)
-                        url += '&markers=label:{label}|color:blue|{lat},{lon}'.format(
-                            lat=round(bbox['n'], 5),
-                            lon=round(bbox['e'], 5),
-                            label=label)
-                    url += '&path='
+                        points = [(bbox['n'], bbox['w']),
+                                  (bbox['n'], bbox['e']),
+                                  (bbox['s'], bbox['e']),
+                                  (bbox['s'], bbox['w']),
+                                  (bbox['n'], bbox['w'])]
+                        p = polyenc.encode([(p[1], p[0]) for p in points])
+                        polyline_encoded = p['points']
+                        url += '&path=color:0x{}|enc:{}'.format(
+                            color_hex[1:], polyline_encoded)
+                    print "{}: {}".format(item, color_name)
+
                 else:
-                    assert False
+                    raise TypeError()
 
-                bbox = geohash.bbox(gh)
-                points = [(bbox['n'], bbox['w']),
-                          (bbox['n'], bbox['e']),
-                          (bbox['s'], bbox['e']),
-                          (bbox['s'], bbox['w']),
-                          (bbox['n'], bbox['w'])]
-                p = polyenc.encode([(p[1], p[0]) for p in points])
-                polyline_encoded = p['points']
-                url += 'enc:{}'.format(polyline_encoded)
-
-                if use_label:
-                    label_description.setdefault(label, [])
-                    label_description[label].append(obj)
-
-        if return_only:
-            return label_description, url
-        else:
-            # maybe the browser autocodes charachters so actually more are used
-            print 'image: {} ({} chars, 2048 allowed)'.format(url, len(url))
-            print
-            print 'image legend'
-            print '------------'
-            for label, objs in label_description.items():
-                print ' {} | {}'.format(label, ', '.join(str(i) for i in objs))
-            print '------------'
             webbrowser.open_new_tab(url)
 
     def __repr__(self):
         return '<Globe with {} pins at {}>'.format(len(self), hex(id(self)))
-
 
 
 class Area(object):
@@ -472,7 +426,7 @@ class Area(object):
             raise TypeError('other must also be a Area')
         return Area(self._redis,
                     self.geohashes.union(other.geohashes),
-                    key_prefix=self._key_prefix())
+                    key_prefix=self._key_prefix)
 
     def __eq__(self, other):
         if not isinstance(other, Area):
@@ -495,3 +449,159 @@ class Area(object):
     @property
     def bboxes(self):
         return tuple(geohash.bbox(gh) for gh in self.geohashes)
+
+    def _get_named_neighbors(self, gh):
+        ghs = {}
+        gh_bbox = geohash.bbox(gh)
+        for g in geohash.expand(gh):
+            if gh == g:
+                continue
+            b = geohash.bbox(g)
+
+            if gh_bbox['n'] == b['n'] and gh_bbox['w'] == b["e"]:
+                ghs['L'] = g
+            elif gh_bbox['n'] == b['n'] and gh_bbox['e'] == b["w"]:
+                ghs['R'] = g
+
+            elif gh_bbox['e'] == b['e'] and gh_bbox['n'] == b["s"]:
+                ghs['U'] = g
+            elif gh_bbox['e'] == b['e'] and gh_bbox['s'] == b["n"]:
+                ghs['D'] = g
+
+            elif gh_bbox['n'] == b['s'] and gh_bbox['w'] == b['e']:
+                ghs['LU'] = g
+            elif gh_bbox['n'] == b['s'] and gh_bbox['e'] == b['w']:
+                ghs['RU'] = g
+
+            elif gh_bbox['s'] == b['n'] and gh_bbox['w'] == b['e']:
+                ghs['LD'] = g
+            elif gh_bbox['s'] == b['n'] and gh_bbox['e'] == b['w']:
+                ghs['RD'] = g
+
+        return ghs
+
+    def get_edge_points(self):
+
+        # search for edges
+        edge_points = []
+        edge_detection = [
+            dict(empty='LU', notempty='', edge=('n', 'w')),
+            dict(empty='RU', notempty='', edge=('n', 'e')),
+            dict(empty='LD', notempty='', edge=('s', 'w')),
+            dict(empty='RD', notempty='', edge=('s', 'e')),
+            dict(empty=('LU',), notempty='LU', edge=('n', 'w')),
+            dict(empty=('RU',), notempty='RU', edge=('n', 'e')),
+            dict(empty=('LD',), notempty='LD', edge=('s', 'w')),
+            dict(empty=('RD',), notempty='RD', edge=('s', 'e')),
+        ]
+
+        for gh in self.geohashes:
+            neighbors = self._get_named_neighbors(gh)
+
+            for detect in edge_detection:
+                empty_passes = all(neighbors[direction] not in self.geohashes
+                                   for direction in detect['empty'])
+                notempty_passes = all(neighbors[direction] in self.geohashes
+                                      for direction in detect['notempty'])
+
+                if empty_passes and notempty_passes:
+                    x_name, y_name = detect['edge']
+                    b = geohash.bbox(gh)
+                    edge_points.append((b[x_name], b[y_name]))
+
+        return edge_points
+
+    def get_polygons(self):
+
+        # search for edges
+        edge_lines = []
+        edge_detection = [
+            ('U', (('n', 'w'), ('n', 'e'))),
+            ('D', (('s', 'w'), ('s', 'e'))),
+            ('L', (('n', 'w'), ('s', 'w'))),
+            ('R', (('n', 'e'), ('s', 'e'))),
+        ]
+
+        for gh in self.geohashes:
+            neighbors = self._get_named_neighbors(gh)
+
+            for empty, ((x1_name, y1_name),
+                        (x2_name, y2_name)) in edge_detection:
+                if neighbors[empty] not in self.geohashes:
+                    b = geohash.bbox(gh)
+                    edge_lines.append(((b[x1_name], b[y1_name]),
+                                       (b[x2_name], b[y2_name])))
+
+        # merge all the lines to one path
+        lines = list(edge_lines)
+        while True:
+            break_ = False
+            found = False
+            for (from_point1, to_point1) in lines:
+                if break_:
+                    break
+                for (from_point2, to_point2) in lines:
+                    if break_:
+                        break
+                    if (from_point1, to_point1) == (from_point2, to_point2):
+                        continue
+                    if to_point1 == from_point2 and (
+                            from_point1[0] == to_point2[0]
+                            or from_point1[1] == to_point2[1]):
+                        new = (from_point1, to_point2)
+                        remove1 = (from_point1, to_point1)
+                        remove2 = (from_point2, to_point2)
+                        break_ = True
+                        found = True
+            if not found:
+                break
+            lines.remove(remove1)
+            lines.remove(remove2)
+            lines.append(new)
+
+        def get_next_line(all_lines, p):
+            for (p1, p2) in all_lines:
+                if p == p1:
+                    all_lines.remove((p1, p2))
+                    return p2
+                if p == p2:
+                    all_lines.remove((p1, p2))
+                    return p1
+            raise ValueError('no next line found')
+
+        polygons = []
+        while True:
+            polygon_points = []
+            try:
+                # choose any point to begin with
+                next_point = lines[0][0]
+            except IndexError:
+                break
+
+            # aggregate all polygons
+            while True:
+
+                # find next point
+                found = False
+                for (p1, p2) in lines:
+                    if next_point == p1:
+                        lines.remove((p1, p2))
+                        next_point = p2
+                        found = True
+                        break
+                    if next_point == p2:
+                        lines.remove((p1, p2))
+                        next_point = p1
+                        found = True
+                        break
+                if not found:
+                    break
+
+                polygon_points.append(next_point)
+
+            # "close the circle"
+            polygon_points.append(polygon_points[0])
+
+            polygons.append(polygon_points)
+
+        return polygons
