@@ -24,7 +24,7 @@ setup(name='geonear',
       install_requires=[
           'requests',
           'python-geohash',
-          # 'markdown',
+          'gpolyencode',
       ],
       include_package_data=True,
       zip_safe=True)
